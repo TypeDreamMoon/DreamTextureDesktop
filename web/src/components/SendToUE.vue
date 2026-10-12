@@ -48,7 +48,12 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisible)
 })
 
-async function send(sessionID?: string) {
+// 一律带上 session_id，哪怕列表里只有一个会话。
+//
+// 不带的话由后端挑「恰好在线的那一个」，而页面上的列表是最多 10 秒前的快照：这 10 秒里
+// A 关了、B 开了，用户点的明明是 A，却会发给 B。带上之后后端发现 A 不在线会回 409 session_gone，
+// 下面的 catch 里重拉列表，用户看到的是「A 已下线」而不是一次发错了地方的推送。
+async function send(sessionID: string) {
   if (sending.value) return
   sending.value = true
   try {
@@ -89,7 +94,7 @@ const options = computed(() =>
       size="small"
       :disabled="sessions.length === 0"
       :loading="sending"
-      @click="send()"
+      @click="send(sessions[0]?.session_id)"
     >
       发送到 UE
     </NButton>
