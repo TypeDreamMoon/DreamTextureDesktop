@@ -17,6 +17,8 @@ export interface Param {
   note?: string
   /** 由后端填写，界面上不显示（例如云端底图落盘后的文件名）。 */
   hidden?: boolean
+  /** 必填：后端提交时就会拦下没给的请求。 */
+  required?: boolean
   /** 选项要运行时才知道的参数用它指定控件，留空则按 type 渲染。 */
   widget?: 'imagen-model' | string
 }

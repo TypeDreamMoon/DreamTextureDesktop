@@ -63,7 +63,12 @@ const matMode = persistedEnum<'combo' | 'custom'>('gen.matmode', 'combo', ['comb
 const srcID = persisted<string>('gen.src', '')
 const decID = persisted<string>('gen.dec', '')
 
-const sourceSegs = computed(() => segments.value.filter((s) => s.segment === 'source'))
+// 生成台只列"靠提示词出图"的出图段。有的段不生成（比如"已有底图"，唯一的输入是
+// 上传的一张图，给 UE 插件走 API 用）——列进来的话这个页面没有提示词可填，
+// 提交按钮永远灰着，用户只会觉得是界面坏了。
+const sourceSegs = computed(() =>
+  segments.value.filter((s) => s.segment === 'source' && s.params.some((p) => p.key === 'prompt')),
+)
 const decomposeSegs = computed(() => segments.value.filter((s) => s.segment === 'decompose'))
 // 自定义模板 = 材质档里不是拼出来的那些。
 const customWorkflows = computed(() => kindWorkflows.value.filter((w) => !w.source_segment))

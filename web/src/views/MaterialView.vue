@@ -7,6 +7,7 @@ import MaterialPreview3D from '../components/MaterialPreview3D.vue'
 import SendToUE from '../components/SendToUE.vue'
 import { api, fileURL } from '../api/client'
 import { persistedEnum } from '../persist'
+import { workflows } from '../store'
 import { CHANNEL_LABEL, CHANNEL_ORDER } from '../api/types'
 import type { Manifest, MaterialIndex } from '../api/types'
 
@@ -96,6 +97,14 @@ async function toggleFavorite() {
   }
 }
 
+// 生成台是按提示词出图的。有的材质不是这么来的——例如从虚幻里送来补齐通道的
+// （"已有底图"那一段，唯一的输入是上传的图），回填过去既没有提示词可改，
+// 底图那张上传的图也未必还在，所以不给这个入口。
+const canRegenerate = computed(() => {
+  const wf = workflows.value.find((w) => w.id === manifest.value?.workflow.id)
+  return !wf || wf.params.some((p) => p.key === 'prompt')
+})
+
 // 参数回填：带着这套材质的全部参数回生成台，改一改再来一张。
 function regenerate() {
   if (!manifest.value) return
@@ -146,7 +155,7 @@ function kb(n: number) {
           <NButton size="small" :type="favorite ? 'primary' : 'default'" tertiary @click="toggleFavorite">
             {{ favorite ? '已收藏' : '收藏' }}
           </NButton>
-          <NButton size="small" @click="regenerate">用这套参数再来一张</NButton>
+          <NButton v-if="canRegenerate" size="small" @click="regenerate">用这套参数再来一张</NButton>
         </div>
       </header>
 
