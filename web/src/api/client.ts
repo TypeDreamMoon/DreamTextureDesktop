@@ -131,7 +131,7 @@ export const api = {
 
   // 不给 sessionID 时由后端决定：恰好一个在线就发给它，否则 409 并带上列表。
   sendToUE: (materialID: string, sessionID?: string) =>
-    request<{ ok: boolean; material_id: string; session: UESession }>(
+    request<{ ok: boolean; material_id: string; delivery_id: string; session: UESession }>(
       `/api/materials/${materialID}/send-to-ue`,
       { method: 'POST', body: JSON.stringify(sessionID ? { session_id: sessionID } : {}) },
     ),

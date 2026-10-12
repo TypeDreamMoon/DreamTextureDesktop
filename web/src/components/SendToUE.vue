@@ -53,7 +53,8 @@ async function send(sessionID?: string) {
   sending.value = true
   try {
     const r = await api.sendToUE(props.materialId, sessionID)
-    message.success(`已发送到 ${r.session.name}，请到虚幻编辑器里查看导入结果`)
+    // 不说「已导入」：202 只保证推送发出去并记下了。编辑器恰好在断线重连时，后端会在它重连后补发。
+    message.success(`已发送到 ${r.session.name}。编辑器若暂时断线，会在重连后补上；请到虚幻编辑器里查看导入结果`)
   } catch (e) {
     // 409（刚好下线、或又多了一个编辑器）这类都靠重拉一遍列表来纠正显示。
     message.error(String((e as Error).message))
