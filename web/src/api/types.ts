@@ -159,6 +159,18 @@ export interface Manifest {
   license_flags?: { commercial_use: boolean; reason?: string }
   params?: Record<string, unknown>
   /**
+   * 这套材质是从别处的一份资产派生的（UE 插件回流）。缺省即凭提示词生成。
+   * maps_in 是当时送进来的各通道输入图的指纹（文件字节 SHA-256 的前 16 位），
+   * 不是产物的——产物被缩放、重新编码过。
+   */
+  derived_from?: {
+    kind: 'ue_material' | string
+    asset_path?: string
+    engine?: string
+    mode: 'fill_channels' | 'restyle' | string
+    maps_in?: Record<string, string>
+  }
+  /**
    * 底图来自云端时的出处。这个字段一旦存在就说明这份材质**复现不了**：
    * 云端图像接口不支持种子，manifest 里的 seed 只作用于本地那一半。
    */

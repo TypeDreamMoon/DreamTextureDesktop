@@ -97,6 +97,11 @@ async function toggleFavorite() {
   }
 }
 
+const DERIVED_MODE: Record<string, string> = {
+  fill_channels: '补齐通道（原图直接进分解）',
+  restyle: '改写外观（以原图为参考重绘）',
+}
+
 // 生成台是按提示词出图的。有的材质不是这么来的——例如从虚幻里送来补齐通道的
 // （"已有底图"那一段，唯一的输入是上传的图），回填过去既没有提示词可改，
 // 底图那张上传的图也未必还在，所以不给这个入口。
@@ -245,6 +250,24 @@ function kb(n: number) {
             <p v-if="manifest.source" class="license dt-faint">
               底图来自云端模型，那一步不支持种子——同样的参数再跑一次不会得到同一张图。
             </p>
+          </div>
+
+          <div v-if="manifest.derived_from" class="block dt-panel">
+            <p class="dt-label">派生自</p>
+            <dl>
+              <dt>来源</dt>
+              <dd class="dt-mono wrap">
+                {{ manifest.derived_from.kind === 'ue_material' ? '虚幻材质' : manifest.derived_from.kind }}
+                <template v-if="manifest.derived_from.asset_path">
+                  {{ manifest.derived_from.asset_path }}
+                </template>
+              </dd>
+              <dt>方式</dt>
+              <dd>{{ DERIVED_MODE[manifest.derived_from.mode] ?? manifest.derived_from.mode }}</dd>
+              <template v-if="manifest.derived_from.engine">
+                <dt>引擎</dt><dd class="dt-mono">UE {{ manifest.derived_from.engine }}</dd>
+              </template>
+            </dl>
           </div>
 
           <div v-if="manifest.source" class="block dt-panel">
