@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { NButton, NSpin, NTag, useMessage } from 'naive-ui'
 import TileViewer from '../components/TileViewer.vue'
 import MaterialPreview3D from '../components/MaterialPreview3D.vue'
+import SendToUE from '../components/SendToUE.vue'
 import { api, fileURL } from '../api/client'
 import { persistedEnum } from '../persist'
 import { CHANNEL_LABEL, CHANNEL_ORDER } from '../api/types'
@@ -141,6 +142,7 @@ function kb(n: number) {
           </div>
         </div>
         <div class="acts">
+          <SendToUE :material-id="manifest.id" />
           <NButton size="small" :type="favorite ? 'primary' : 'default'" tertiary @click="toggleFavorite">
             {{ favorite ? '已收藏' : '收藏' }}
           </NButton>
@@ -327,6 +329,7 @@ h1 {
 }
 .acts {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-left: auto;
 }

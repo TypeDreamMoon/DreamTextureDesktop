@@ -25,6 +25,7 @@ import type {
   Refined,
   RuntimeConfig,
   Settings,
+  UESession,
   WorkflowMeta,
 } from './types'
 
@@ -121,6 +122,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ favorite }),
     }),
+
+  // ---- 虚幻编辑器 ----
+  // sessions 在后端永远是数组，但前端照旧容忍 null：老后端或中间层出岔子时
+  // 一个 .length 就能把整页炸掉。
+  ueSessions: () =>
+    request<{ sessions: UESession[] | null }>('/api/ue/sessions').then((r) => r.sessions ?? []),
+
+  // 不给 sessionID 时由后端决定：恰好一个在线就发给它，否则 409 并带上列表。
+  sendToUE: (materialID: string, sessionID?: string) =>
+    request<{ ok: boolean; material_id: string; session: UESession }>(
+      `/api/materials/${materialID}/send-to-ue`,
+      { method: 'POST', body: JSON.stringify(sessionID ? { session_id: sessionID } : {}) },
+    ),
 
   // ---- 图片 ----
   pictures: (q: { q?: string; fav?: boolean; limit?: number } = {}) => {

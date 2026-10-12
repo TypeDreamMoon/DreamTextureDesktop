@@ -592,3 +592,12 @@ export const CHANNEL_LABEL: Record<string, string> = {
   orm: 'ORM 打包',
   source: '原始生成图',
 }
+
+/** 一个在线的虚幻编辑器（插件定时报到，后端 45 秒没心跳就当它下线）。 */
+export interface UESession {
+  session_id: string
+  name: string
+  project: string
+  engine: string
+  last_seen: string
+}
