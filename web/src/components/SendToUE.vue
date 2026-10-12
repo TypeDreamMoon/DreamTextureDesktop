@@ -32,15 +32,21 @@ async function refresh() {
 }
 
 // 页面开着的时候编辑器可能后来才启动（或中途关掉），定时再问一次，
-// 不然按钮会一直停在拉取那一刻的状态，要刷新页面才能用。隐藏的标签页不问。
+// 不然按钮会一直停在拉取那一刻的状态，要刷新页面才能用。隐藏的标签页不问；
+// 切回来时立刻问一次，不让人对着隐藏期间攒下的过期状态再等最多 10 秒。
 let timer: ReturnType<typeof setInterval> | undefined
+const onVisible = () => {
+  if (document.visibilityState === 'visible') refresh()
+}
 onMounted(() => {
   refresh()
-  timer = setInterval(() => {
-    if (document.visibilityState === 'visible') refresh()
-  }, 10000)
+  timer = setInterval(onVisible, 10000)
+  document.addEventListener('visibilitychange', onVisible)
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  document.removeEventListener('visibilitychange', onVisible)
+})
 
 async function send(sessionID?: string) {
   if (sending.value) return
