@@ -328,10 +328,17 @@ const denoise = computed({
 
 // 提示词的前后缀由模板固定追加（例如 CHORD 需要的平光约束），
 // 这里如实展示，让用户知道真正送进去的是什么。
+//
+// 「无缝平铺」关掉时后端换用另一套前后缀（untiled_*：去掉 seamless tileable 这类为平铺服务的词，
+// 保留平光约束），预览必须跟着换——这与后端 Param.Decorate 是同一条规则，改一边要改另一边。
+// untiled_* 缺省（undefined）表示沿用 prefix / suffix，空串才是"确实要去掉"。
 const fullPrompt = computed(() => {
   const p = promptParam.value
   if (!p) return ''
-  return `${p.prefix ?? ''}${String(values.value[p.key] ?? '')}${p.suffix ?? ''}`
+  const tiled = values.value['tileable'] !== false
+  const prefix = (tiled ? p.prefix : (p.untiled_prefix ?? p.prefix)) ?? ''
+  const suffix = (tiled ? p.suffix : (p.untiled_suffix ?? p.suffix)) ?? ''
+  return `${prefix}${String(values.value[p.key] ?? '')}${suffix}`
 })
 
 const canSubmit = computed(

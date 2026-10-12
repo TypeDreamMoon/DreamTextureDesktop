@@ -11,6 +11,9 @@ export interface Param {
   options?: (string | number)[]
   prefix?: string
   suffix?: string
+  /** 「无缝平铺」(tileable) 关掉时取代 prefix / suffix；缺省表示沿用。 */
+  untiled_prefix?: string
+  untiled_suffix?: string
   default?: unknown
   min?: number
   max?: number
