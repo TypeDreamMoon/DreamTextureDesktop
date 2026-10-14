@@ -10,22 +10,56 @@ WebSocket 都在它那儿。外壳再管一遍只会多一条要对齐的进程�
 
 ## 构建
 
-```bash
-go build -o "src-tauri/binaries/dreamtexture-$(rustc -vV | sed -n 's/^host: //p').exe" ./cmd/dreamtexture
-```
+后端不在本仓库里，而是 `backend/` 子模块（`.gitmodules` 指向
+`https://github.com/TypeDreamMoon/DreamTexture.git`）。第一次要把它检出来：
 
 ```bash
-pnpm install && pnpm tauri build
+git clone --recurse-submodules https://github.com/TypeDreamMoon/DreamTextureDesktop.git
+# 已经 clone 过：git submodule update --init
 ```
 
-产物是 `src-tauri/target/release/bundle/nsis/DreamTexture_<版本>_x64-setup.exe`（约 13 MB）。
-开发时用 `pnpm tauri dev`。
+然后两步（需要 pwsh 7、pnpm、Go、Rust）：
+
+```bash
+pnpm install
+pnpm build      # = pnpm sidecar && tauri build
+```
+
+`pnpm sidecar`（`scripts/build-sidecar.ps1`）负责造出 sidecar，依次：
+
+1. 构建 `web/`（`pnpm install --frozen-lockfile` + `pnpm build`，含 vue-tsc）→ `web/dist`
+2. 把 `web/dist` 拷进 `backend/internal/web/dist`（先清空）——那是后端 `go:embed` 的目标
+3. `go build` 后端的 `cmd/dreamtexture` → `src-tauri/binaries/dreamtexture-<目标三元组>.exe`
+   （`-trimpath`、`-s -w`、`-X main.version=<tauri.conf.json 的版本>`、`CGO_ENABLED=0`）
+4. 无论成败，把 `backend/internal/web/dist` 还原成子模块提交的状态，让 `backend/` 保持干净
+
+所以**安装包里的界面永远是本仓库当前源码重建的那份**，不是后端仓库自己提交的那份
+（那份是后端的 `tools/sync-web-ui.ps1` 同步过去、给单独构建后端用的）。
+`internal/web/dist` 里有未提交改动时脚本会拒绝运行，免得还原时把它们抹掉；
+`-SkipWebBuild` 跳过前端构建、直接用现成的 `web/dist`（只调后端时省时间）。
+
+产物是 `src-tauri/target/release/bundle/nsis/DreamTexture_<版本>_x64-setup.exe`（约 7 MB）。
+开发外壳用 `pnpm tauri dev`——它**不会**自动构建 sidecar，`src-tauri/binaries/` 里
+要已经有一个（先跑一次 `pnpm sidecar`）。
 
 sidecar 的文件名必须带目标三元组，这是 Tauri 的约定；`binaries/` 已经 gitignore，
-它是 `go build` 的产物，不进仓库。
+它是编译产物，不进仓库。
 
-> 改前端仍然要先 `cd web && pnpm build`——产物进 `internal/web/dist`，
-> 由 Go 侧 `go:embed`，和外壳无关。
+> 为什么不把 sidecar 构建塞进 `tauri.conf.json` 的 `beforeBuildCommand`：`tauri dev`
+> 不走它，行为不一致；CI 里又要单独传版本号。显式的 `pnpm sidecar` 一步看得见，
+> 也能单独重跑。
+
+## 安装包带的资源
+
+`tauri.conf.json` 的 `bundle.resources` 都取自 `backend/`，装完落在程序（外壳 exe）旁边：
+
+| 源 | 装到 | 为什么要带 |
+|---|---|---|
+| `backend/workflows` | `workflows/` | 工作流模板；配置里的 `workflows_dir` 相对配置文件所在目录的上一级解析 |
+| `backend/configs/dreamtexture.default.json` | `configs/dreamtexture.default.json` | 首次启动时铺成 `configs/dreamtexture.json`，升级不覆盖 |
+| `backend/comfy_nodes` | `comfy_nodes/` | 一键部署 ComfyUI 时要把 DreamTexture 自有节点（CHORD 平铺包装等）接入新环境，后端在「工作目录或 exe 旁边的 `comfy_nodes`」里找它；不带的话部署会在这一步报找不到 |
+
+`externalBin` 仍是 `binaries/dreamtexture`。
 
 ## 两条启动路径
 
@@ -81,7 +115,7 @@ sidecar 的文件名必须带目标三元组，这是 Tauri 的约定；`binarie
 
 关窗口退出时，**只杀自己拉起来的那个后端**；附着到已有实例时什么都不做。
 
-后端被杀之后会把 ComfyUI 一起收干净（Windows 上用 Job Object，见
+后端被杀之后会把 ComfyUI 一起收干净（Windows 上用 Job Object，见后端的
 `internal/comfy`）。这条链实测验证过：关窗口 → 两个进程都没了、8777 释放、
 没有孤儿；先手动起后端再开外壳 → 关窗口后那个后端还活着。
 
@@ -93,12 +127,12 @@ sidecar 的文件名必须带目标三元组，这是 Tauri 的约定；`binarie
 这条是做外壳时才暴露的：以前按 `cwd` 解析，从仓库根手动跑时两者恰好一样，
 所以一直没事。而双击启动、被外壳拉起来、从服务里启动，cwd 各不相同——
 按 cwd 解析的话 `output/` 和 `data/` 会落到谁也想不到的地方，**而且不报错**，
-只是"我的素材呢"。`internal/config/config_test.go` 盯着这条。
+只是"我的素材呢"。后端的 `internal/config/config_test.go` 盯着这条。
 
 ## 起不来的时候
 
 窗口里有个占位页，后端 90 秒内没开始监听就把原因显示在上面，并指向
 `logs/dreamtexture.log`。用页面不用弹窗，是因为错误信息里有路径——弹窗里没法复制。
 
-日志见 [backend.md](backend.md)：默认落在程序旁边的 `logs/`，那儿写不了就退到
+日志见后端文档 [backend.md](../backend/docs/backend.md)：默认落在程序旁边的 `logs/`，那儿写不了就退到
 用户缓存目录。这正是外壳最需要它的地方——没有控制台，标准输出直接丢掉。

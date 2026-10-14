@@ -1,27 +1,40 @@
 # 前端说明（M2）
 
-Vue 3 + Vite + TypeScript + Naive UI。构建产物嵌进 Go 二进制，最终交付仍是一个 exe。
+Vue 3 + Vite + TypeScript + Naive UI。本仓库（DreamTextureDesktop）里的 `web/` 就是它的源码；
+构建产物 `web/dist` 由后端 `go:embed` 进 Go 二进制，最终交付仍是一个 exe。
 
 ## 跑起来
 
-日常使用不需要单独跑前端——`bin/dreamtexture.exe` 里已经带着界面，
-启动后浏览器打开 `http://127.0.0.1:8777` 即可。
+日常使用不需要单独跑前端——后端 exe 里已经带着界面，启动后浏览器打开
+`http://127.0.0.1:8777` 即可；桌面版则是装好的应用直接打开。
 
 改前端时用开发服务器，接口与 WebSocket 都代理到后端，改完即刷，不用重启后端
-（重启后端要等 ComfyUI 重新安定，一次两分钟）：
+（重启后端要等 ComfyUI 重新安定，一次两分钟）。**先让一个后端在 8777 上跑着**
+（装好的桌面版、或在 `backend/` 里 `go run ./cmd/dreamtexture`、或别处的 exe 都行），然后：
 
 ```bash
-cd web && pnpm dev
+pnpm -C web dev
 ```
 
-改完重新构建并嵌入：
+开发服务器在 `http://127.0.0.1:5173`，把 `/api`（含 WebSocket）代理到 `127.0.0.1:8777`
+（见 `web/vite.config.ts`）。
+
+## 构建与产物去向
 
 ```bash
-cd web && pnpm build && cd .. && go build -o bin/dreamtexture.exe ./cmd/dreamtexture
+pnpm -C web install --frozen-lockfile
+pnpm -C web build        # 先 vue-tsc 类型检查，再 vite build
 ```
 
-Vite 的 `outDir` 直接指向 `internal/web/dist`，省掉一步拷贝。仓库里留了一个占位
-`index.html`，保证没构建过前端时 Go 也能编译。
+产物固定在 **`web/dist`**——这是和后端之间的约定，不要改 `outDir`。它不再直接写进后端的
+embed 目录，由两条路各取所需：
+
+- **后端仓库自带的那份**：后端的 `tools/sync-web-ui.ps1` 从本仓库构建、拷进它自己的
+  `internal/web/dist` 并提交，好让只拿后端仓库的人不装 node 也能 `go build`。
+  前端改完要让单独跑后端的人也看到，就得在后端那边同步一次。
+- **桌面安装包里的那份**：`scripts/build-sidecar.ps1` 重建 `web/dist`，临时拷进
+  `backend/` 子模块的 `internal/web/dist` 编出 sidecar，再把子模块还原干净。
+  见 [desktop-shell.md](desktop-shell.md)。
 
 ## 页面
 
@@ -81,7 +94,7 @@ Vite 的 `outDir` 直接指向 `internal/web/dist`，省掉一步拷贝。仓库
 ## 发送到 UE
 
 素材详情页头部的「发送到 UE」（`components/SendToUE.vue`）把当前这套材质推给一个正开着的
-虚幻编辑器，后端的机制见 [backend.md](backend.md) 的「UE 推送通路」。
+虚幻编辑器，后端的机制见 [backend.md](../backend/docs/backend.md) 的「UE 推送通路」。
 
 | 在线的编辑器 | 表现 |
 |---|---|
@@ -287,7 +300,7 @@ identity 更清楚，也干净得多。**暖色留给强调色，不铺满底。
 标签页被冻结、机器休眠再唤醒、半开连接，都会让 close 丢掉,而丢掉之后界面会一直
 显示"已连接"外加过期状态。所以后端每 15 秒发一个**文本帧** `{"type":"hb"}`，
 前端超过 40 秒没收到任何消息就主动 close 并重连。这两个数是一对跨语言的约定，
-`internal/api/websocket_test.go` 会去读 `store.ts` 把它钉住。
+后端的 `internal/api/websocket_test.go` 会去读本仓库的 `web/src/store.ts` 把它钉住（后端在 `backend/` 子模块里时，用环境变量 `DREAMTEXTURE_DESKTOP_DIR` 指向本仓库根；找不到源码测试会跳过，不算失败）。
 
 **重连要包住 `new WebSocket` 的同步异常。** 它在某些上下文会直接抛
 （地址不合法、SecurityError），而重连是在 `setTimeout` 回调里发起的，抛出去
@@ -295,8 +308,8 @@ identity 更清楚，也干净得多。**暖色留给强调色，不铺满底。
 是再也不重试。同理，每条连接要有自己的 `settled` 标志：看门狗关掉一条僵死连接、
 新连接已经建好之后，旧连接迟到的 close 事件不该再排一次重连，否则会越滚越多。
 
-**改了前端必须重新 `go build`。** 前端是 `//go:embed` 进二进制的，
-`pnpm build` 之后不重编 Go 就还是旧界面，而且浏览器 hash 路由跳转不会重载 JS，
+**改了前端必须重新编后端。** 前端是后端 `//go:embed` 进二进制的（桌面版走 `scripts/build-sidecar.ps1`），
+`pnpm -C web build` 之后不重编 Go 就还是旧界面，而且浏览器 hash 路由跳转不会重载 JS，
 看起来就像改动没生效。
 
 ## 视图偏好留存

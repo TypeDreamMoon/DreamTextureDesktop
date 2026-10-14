@@ -95,6 +95,10 @@ jobs:
       - name: 后端的静态检查与测试
         working-directory: backend
         shell: bash
+        env:
+          # 后端里有条测试要读本仓库的 web/src/store.ts（心跳约定），告诉它在哪；
+          # 不告诉的话它会跳过，不算失败，但也就没人盯着那对数了。
+          DREAMTEXTURE_DESKTOP_DIR: ${{ github.workspace }}
         run: |
           go vet ./...
           go test ./...
