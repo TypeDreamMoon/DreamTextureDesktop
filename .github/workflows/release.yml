@@ -1,0 +1,151 @@
+# 打 tag 就出一个 Windows 安装包并发到 Release。
+#
+# 也可以在 Actions 页手动跑（workflow_dispatch），那时只上传构建产物、不发布——
+# 想先验一下包能不能装、能不能起来，不必先打一个 tag 出去。
+#
+# 后端是 backend/ 子模块，安装包里的 sidecar 用的是子模块当前钉住的那个提交。
+# 要发新后端，先在本仓库里把子模块 bump 到想要的提交、提交，再打 tag。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # 发 Release 要写权限
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive # backend/
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Rust 的编译是这里最慢的一环，缓存下来。key 跟着 Cargo.lock 走。
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            web/pnpm-lock.yaml
+
+      # 版本号从 tag 来，手动跑时保持仓库里写的那个。
+      # 四处要一致：Tauri 的包信息、Rust crate、安装包文件名、界面上报的后端版本。
+      #
+      # 仓库里那几个值正常随发布提交一起 bump，这里再刷一遍是为了兜住"忘了 bump
+      # 就打了 tag"——那种情况下装出来的包版本号是错的，而且从产物上看不出来。
+      - name: 定版本号
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            V="${GITHUB_REF#refs/tags/v}"
+          else
+            V=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          node -e "
+            const fs=require('fs'), p='src-tauri/tauri.conf.json';
+            const c=JSON.parse(fs.readFileSync(p,'utf8'));
+            c.version='$V';
+            fs.writeFileSync(p, JSON.stringify(c,null,2)+'\n');
+          "
+          # Cargo.toml 只改 [package] 段，别碰依赖那些 version 约束。
+          sed -i '/^\[package\]/,/^\[[^p]/ s/^version = ".*"/version = "'"$V"'"/' src-tauri/Cargo.toml
+          sed -i '/^name = "dreamtexture-shell"$/{n;s/^version = ".*"/version = "'"$V"'"/;}' src-tauri/Cargo.lock
+          echo "版本 $V"
+          grep -m1 '^version' src-tauri/Cargo.toml
+          echo "后端子模块：$(git -C backend describe --tags --always)"
+
+      # 后端仓库自己也提交了一份界面构建（backend/internal/web/dist，由它的
+      # tools/sync-web-ui.ps1 同步），让它不装 node 也能 go build。
+      # 这里的 sidecar 用本仓库源码重建的那份，不用后端带的；两份对不上就提醒一声——
+      # 说明后端那份落后了，单独跑后端的人看到的是旧界面。
+      - name: 构建前端
+        run: |
+          pnpm -C web install --frozen-lockfile
+          pnpm -C web build
+
+      - name: 检查后端自带的界面有没有落后
+        shell: bash
+        run: |
+          if ! diff -rq web/dist backend/internal/web/dist > drift.txt; then
+            echo "::warning::backend/internal/web/dist 与本仓库源码构建的界面不一致，本次安装包用本仓库构建的那份。后端那份需要重新同步（backend 的 tools/sync-web-ui.ps1）"
+            head -10 drift.txt
+          fi
+          rm -f drift.txt
+
+      - name: 后端的静态检查与测试
+        working-directory: backend
+        shell: bash
+        run: |
+          go vet ./...
+          go test ./...
+
+      # 前端上一步已经建好，这里不再重复构建（-SkipWebBuild）。
+      - name: 构建 sidecar
+        shell: pwsh
+        run: ./scripts/build-sidecar.ps1 -Version '${{ steps.ver.outputs.version }}' -SkipWebBuild
+
+      - name: 检查子模块仍然干净
+        shell: bash
+        run: |
+          if [[ -n "$(git -C backend status --short)" ]]; then
+            echo "::error::构建 sidecar 之后 backend/ 不干净，还原步骤没生效"
+            git -C backend status --short
+            exit 1
+          fi
+
+      - name: 打包
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DreamTexture-${{ steps.ver.outputs.version }}-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/dreamtexture-shell.exe
+          if-no-files-found: error
+
+      - name: 发布
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false # 直接发出去，不落草稿
+          generate_release_notes: true
+          files: src-tauri/target/release/bundle/nsis/*-setup.exe
+          body: |
+            ## 装之前
+
+            - Windows 10/11 x64，需要 WebView2 运行时（Win11 自带；Win10 缺的话装一次
+              [Evergreen 运行时](https://developer.microsoft.com/microsoft-edge/webview2/)）
+            - **不含 ComfyUI**。装完打开「设置 → ComfyUI 环境 → 一键部署」，
+              它会用 uv 装一份独立的 ComfyUI，不动你已有的整合包
+            - 部署要用到 git，装一个（[git-scm.com](https://git-scm.com/)）再开始
+
+            出问题先看程序旁边的 `logs/dreamtexture.log`。
+
+            ## 产物的可商用性
+
+            写实管线用的 CHORD 是 Ubisoft 的 **research-only** 许可，
+            用它分解出来的材质不可商用。界面上会标出来，`manifest.json` 里也有
+            `license_flags`。
