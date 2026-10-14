@@ -30,6 +30,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 管道里（CI、被别的程序拉起）中文输出按 UTF-8 走，免得乱码。
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $PSScriptRoot
