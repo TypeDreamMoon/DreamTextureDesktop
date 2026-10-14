@@ -1,11 +1,12 @@
 {
   "name": "dreamtexture-shell",
   "private": true,
-  "description": "Tauri 外壳。前端在 web/，后端在 cmd/dreamtexture——这里只有打包窗口用的 CLI。",
+  "description": "DreamTexture 桌面版的 Tauri 外壳。界面在 web/，后端在 backend/（子模块）——这里只有打包窗口用的 CLI。",
   "packageManager": "pnpm@10.30.0",
   "scripts": {
+    "sidecar": "pwsh -NoProfile -File scripts/build-sidecar.ps1",
     "dev": "tauri dev",
-    "build": "tauri build",
+    "build": "pnpm sidecar && tauri build",
     "tauri": "tauri"
   },
   "devDependencies": {

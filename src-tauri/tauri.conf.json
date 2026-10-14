@@ -19,8 +19,9 @@
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
     "externalBin": ["binaries/dreamtexture"],
     "resources": {
-      "../workflows": "workflows/",
-      "../configs/dreamtexture.default.json": "configs/dreamtexture.default.json"
+      "../backend/workflows": "workflows/",
+      "../backend/comfy_nodes": "comfy_nodes/",
+      "../backend/configs/dreamtexture.default.json": "configs/dreamtexture.default.json"
     },
     "windows": {
       "nsis": {
