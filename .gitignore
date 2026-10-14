@@ -1,0 +1,14 @@
+# 前端
+/web/node_modules/
+/web/dist/
+/.vite/
+
+# Tauri 外壳
+/node_modules/
+/src-tauri/target/
+/src-tauri/gen/
+# sidecar 是从 backend/ 编出来的产物，不进仓库
+/src-tauri/binaries/
+
+# 工具自己的目录，不属于项目
+/.claude/
